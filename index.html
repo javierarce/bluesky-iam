@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>I am</title>
+    <style>
+      :root {
+        --white: #fff;
+        --black: #000;
+        --background: var(--black);
+        --text: var(--white);
+      }
+      body {
+        margin: 0;
+        padding: 0;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        font-family: -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", Roboto, Ubuntu;
+        background: var(--background);
+        color: var(--text);
+      }
+
+      a {
+        color: var(--text);
+      }
+
+      #content {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        font-size: 10vmin;
+      }
+
+      .Sentence {
+        position: relative;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        left: -1em;
+      }
+
+      .fixed-text {
+        position: absolute;
+        right: 50%;
+        white-space: nowrap;
+        margin-right: 8px;
+        opacity: 0.5;
+      }
+
+      #ing {
+        position: absolute;
+        left: 50%;
+        white-space: nowrap;
+        margin-left: 8px;
+        opacity: 1;
+        transition: opacity 0.5s ease-in-out;
+      }
+
+      #info {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        padding: 1em;
+        font-size: 14px;
+        line-height: 1.5;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      #stats, 
+      #credit {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      #credit {
+        color: var(--text);
+        font-size: 14px;
+      }
+    </style>
+    
+  <script>
+      class BlueSkyItemTracker {
+        constructor() {
+          this.ENDPOINT = 'subscribe?wantedCollections=app.bsky.feed.post'
+          this.JETSTREAMS = [
+            'wss://jetstream1.us-east.bsky.network',
+            'wss://jetstream2.us-east.bsky.network',
+            'wss://jetstream1.us-west.bsky.network',
+            'wss://jetstream2.us-west.bsky.network'
+          ];
+
+          this.totalPosts = 0;
+          this.itemCount = 0;
+          this.ws = null;
+          this.isAnimating = false;
+          this.queue = [];
+          this.DEFAULT_LANG = 'en';
+        }
+
+        initialize() {
+          this.connectWebSocket();
+          this.updateStats();
+          
+          // Set up transition end listener
+          window.ing.addEventListener('transitionend', () => {
+            if (window.ing.style.opacity === '0') {
+              window.ing.style.opacity = '1';
+              window.ing.textContent = this.currentItem;
+            } else {
+              this.isAnimating = false;
+              this.processQueue();
+            }
+          });
+        }
+
+        detect(text) {
+          const ing = text.match(/(?:I am|I'm)\s+(\w+ing)\b/i);
+          if (ing) {
+            return ing[1];
+          }
+          return false;
+        }
+
+        updateStats() {
+          document.getElementById('totalPosts').textContent = this.totalPosts;
+          document.getElementById('itemCount').textContent = this.itemCount;
+        }
+
+        handleMessage(event) {
+          const data = JSON.parse(event.data);
+          this.totalPosts++;
+
+          if (data.commit?.record?.langs?.includes(this.DEFAULT_LANG)) {
+            if (data.commit?.record?.text) {
+              const text = data.commit.record.text;
+              const item = this.detect(text);
+
+              if (item) {
+                this.itemCount++;
+                this.queueItem(item);
+              }
+            }
+
+            this.updateStats();
+          }
+        }
+
+        queueItem(item) {
+          this.queue.push(item);
+          this.processQueue();
+        }
+
+        processQueue() {
+          if (this.isAnimating || this.queue.length === 0) {
+            return;
+          }
+
+          this.currentItem = this.queue.shift();
+          this.render();
+        }
+
+        render() {
+          this.isAnimating = true;
+          window.ing.style.opacity = '0';
+        }
+
+        connectWebSocket() {
+          const randomJetstream = this.JETSTREAMS[
+            Math.floor(Math.random() * this.JETSTREAMS.length)
+          ];
+
+          this.ws = new WebSocket(
+            `${randomJetstream}/${this.ENDPOINT}`,
+          );
+
+          this.ws.onmessage = (event) => this.handleMessage(event);
+
+          this.ws.onerror = (error) => {
+            console.error('WebSocket error:', error);
+            setTimeout(() => this.connectWebSocket(), 1000);
+          };
+
+          this.ws.onclose = () => {
+            setTimeout(() => this.connectWebSocket(), 1000);
+          };
+        }
+      }
+
+      window.onload = function() {
+        window.ing = document.getElementById('ing');
+        const tracker = new BlueSkyItemTracker();
+        tracker.initialize();
+      };
+    </script>
+
+  </head>
+  <body>
+    <div id="content">
+ <div class="Sentence">
+        <span class="fixed-text">I am</span>
+        <span id="ing">…</span>
+      </div>
+    </div>
+    <div id="info">
+      <div id="stats">
+        <span id="itemCount">0</span> of  <span id="totalPosts">0</span> items found
+      </div>
+      <div id="credit">Based on <a href="https://www.bewitched.com/demo/rainbowsky">rainbowsky</a> by <a href="https://bsky.app/profile/wattenberg.bsky.social">Martin Wattenberg</a></div>
+    </div>
+  </body>
+</html>
